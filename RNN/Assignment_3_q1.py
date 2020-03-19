@@ -1,67 +1,36 @@
 import os
-import string
 import re
-from array import array
 
 import nltk
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from time import time
-from collections import Counter
 from keras.utils import to_categorical
-from keras.utils.data_utils import get_file
 from keras.models import Sequential, load_model
-from keras.layers import Embedding, LSTM, Dense, SimpleRNN
-from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.layers import Embedding, Dense, SimpleRNN
 from keras.preprocessing.text import Tokenizer
 
-# path : store the current path to convert back to it later
 base_path = os.path.abspath('English Literature.txt')
 
 with open(base_path, encoding='utf-8') as f:
-    raw_text = f.read()
-
-sample = raw_text
+    sample = f.read()
 
 
-# print("Raw sample", sample)
+def format_data(input_string):
+
+    clean_string = re.sub(r'\((\d+)\)', r'', input_string)
+
+    clean_string = re.sub(r'\s\s', ' ', clean_string)
+    return clean_string
 
 
-###Data preprocessing - All the commas and dots are seperated by a space for data preprocessing.
-def format_patent(patent):
-    """Add spaces around punctuation and remove references to images/citations."""
+formatted_string1 = format_data(sample)
+print(len(formatted_string1))
 
-    # Add spaces around punctuation
-    patent = re.sub(r'(?<=[^\s0-9])(?=[:.,;?])', r' ', patent)
-
-    # Remove references to figures
-    patent = re.sub(r'\((\d+)\)', r'', patent)
-
-    # Remove double spaces
-    patent = re.sub(r'\s\s', ' ', patent)
-    return patent
-
-
-f = format_patent(sample)
-# print("Formatted", f)
-
-# tokenizer = Tokenizer(filters='"#$%&*+/:;<=>?@[\\]^_`{|}~\t\n')
-# tokenizer.fit_on_texts([f])
-# s = tokenizer.texts_to_sequences([f])[0]
-# ' '.join(tokenizer.index_word[i] for i in s)
-# tokenizer.word_index.keys()
-
-# tokens = nltk.word_tokenize(f)
-
-# print("No of token inputs", len(tokens))
-
-# integer encode text
+regular_exp = nltk.RegexpTokenizer(r"\w+")
+formatted_string = regular_exp.tokenize(formatted_string1)
 tokenizer = Tokenizer()
-tokenizer.fit_on_texts([f])
-encoded = tokenizer.texts_to_sequences([f])[0]
+tokenizer.fit_on_texts([formatted_string])
 
-# determine the vocabulary size
+encoded = tokenizer.texts_to_sequences([formatted_string])[0]
 vocab_size = len(tokenizer.word_index) + 1
 print('Vocabulary Size: %d' % vocab_size)
 
@@ -72,7 +41,6 @@ for i in range(1, len(encoded)):
     sequences.append(sequence)
 print('Total Sequences: %d' % len(sequences))
 
-# split into X and y elements
 sequences = np.array(sequences)
 X, y = sequences[:, 0], sequences[:, 1]
 
@@ -81,47 +49,34 @@ print(len(X), len(y))
 # one hot encode outputs
 y = to_categorical(y, num_classes=vocab_size)
 
-print(y)
-print(len(y))
 
-# define the network architecture: a embedding followed by LSTM
+#Model Architecture
 embedding_size = 100
 units = 500
-model1 = Sequential()
-model1.add(Embedding(vocab_size, embedding_size, input_length=1))
-model1.add(SimpleRNN(units=500, input_shape=(1, 100)))
-model1.add(Dense(vocab_size, activation='softmax'))
-model1.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-print(model1.summary())
-
-# fit network
-model1.fit(X, y, epochs=10, verbose=2, batch_size=64)
+model = Sequential()
+model.add(Embedding(vocab_size, embedding_size, input_length=1))
+model.add(SimpleRNN(units=units, input_shape=(1, 100)))
+model.add(Dense(vocab_size, activation='softmax'))
+model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+print(model.summary())
+model.fit(X, y, epochs=10, verbose=2)
 
 
-# generate a sequence from the model
-def generate_seq(model, tokenizer, seed_text, n_words):
-    in_text, result = seed_text, seed_text
-    # generate a fixed number of words
+def results(model, tokenizer, input_vector, n_words):
+    output_vector = input_vector
     for _ in range(n_words):
-        # encode the text as integer
-        encoded = tokenizer.texts_to_sequences([in_text])[0]
-        encoded = np.array(encoded)
-        # predict a word in the vocabulary
-        yhat = model.predict_classes(encoded, verbose=0)
-        # map predicted word index to word
         out_word = ''
+        predicted_words = model.predict_classes(np.array(tokenizer.texts_to_sequences([input_vector])[0]))
         for word, index in tokenizer.word_index.items():
-            if index == yhat[0][-1]:
-                out_word = word
+            if index == predicted_words:
+                generated_word = word
                 break
-        # append to input
-        in_text, result = out_word, result + ' ' + out_word
-    return result
+        output_vector = " ".join((output_vector, generated_word))
+        input_vector = generated_word
+    return output_vector
 
 
-# evaluate
-# print(generate_seq(model1, tokenizer, 'Speak', 6))
-model1.save('my_simple_model.h5')
-# evaluate
+model.save('my_simple_model.h5')
 model = load_model('my_simple_model.h5')
-print(generate_seq(model1, tokenizer, 'citizen', 10))
+generated_words = results(model, tokenizer, 'citizen', 10)
+print("The generated words are:", generated_words)

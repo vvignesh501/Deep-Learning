@@ -1,91 +1,58 @@
-# code for loading the format for the notebook
 import os
-
-import os
-import string
 import re
-import tensorflow as tf
-from array import array
 
 import nltk
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from time import time
-from collections import Counter
 from keras.utils import to_categorical
-from keras.utils.data_utils import get_file
 from keras.models import Sequential, load_model
-from keras.layers import Embedding, LSTM, Dense, SimpleRNN, TimeDistributed, Masking, GRU
-from keras.preprocessing.sequence import pad_sequences
-from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.layers import Embedding, Dense, SimpleRNN
 from keras.preprocessing.text import Tokenizer
+from keras.preprocessing.sequence import pad_sequences
 
-# path : store the current path to convert back to it later
 base_path = os.path.abspath('English Literature.txt')
 
 with open(base_path, encoding='utf-8') as f:
-    raw_text = f.read()
-
-sample = raw_text
+    sample = f.read()
 
 
-# print("Raw sample", sample)
+def format_data(input_string):
+    clean_string = re.sub(r'\((\d+)\)', r'', input_string)
 
-###Data preprocessing - All the commas and dots are seperated by a space for data preprocessing.
-def format_patent(patent):
-    """Add spaces around punctuation and remove references to images/citations."""
-
-    # Add spaces around punctuation
-    patent = re.sub('[^A-Za-z0-9]+', ' ', patent)
-
-    # Remove references to figures
-    patent = re.sub(r'\((\d+)\)', r'', patent)
-
-    # Remove double spaces
-    patent = re.sub(r'\s\s', ' ', patent)
-
-    return patent
+    clean_string = re.sub(r'\s\s', ' ', clean_string)
+    return clean_string
 
 
-f = format_patent(sample)
+formatted_string = format_data(sample)
 
-sent_len = 15
-# integer encode text
 regular_exp = nltk.RegexpTokenizer(r"\w+")
-sent = regular_exp.tokenize(f)
-print(sent)
-tokenizer1 = Tokenizer()
-tokenizer1.fit_on_texts(sent)
-#encoded1 = tokenizer1.texts_to_sequences([sent])[0]
+token_sent = regular_exp.tokenize(formatted_string)
+tokenizer = Tokenizer()
+tokenizer.fit_on_texts(token_sent)
+encoded = tokenizer.texts_to_sequences([token_sent])[0]
+
+outputs = []
 
 
-# generate a sequence from a language model
-def generate_seq(model, tokenizer, max_length, seed_text, n_words):
-    in_text = seed_text
-    # generate a fixed number of words
-    for _ in range(n_words):
-        # encode the text as integer
-        # tokenizer.fit_on_texts([in_text])
-        encoded = tokenizer.texts_to_sequences([in_text])[0]
-        # pre-pad sequences to a fixed length
-        encoded = pad_sequences([encoded], maxlen=max_length, padding='pre')
-        # predict probabilities for each word
-        yhat = model.predict_classes(encoded, verbose=0)
-        print(yhat)
-        reverse_word_map = dict(map(reversed, tokenizer.word_index.items()))
-        # map predicted word index to word
-        out_word = ''
-        for word, index in tokenizer.word_index.items():
-            if index == yhat[0][-1]:
-                out_word = word
-                break
-        # append to input
-        in_text += ' ' + out_word
-    return in_text
+def results(model, tokenizer, max_length, input_vector, n_words):
+    for i in range(len(n_words)):
+        input_vector = n_words[i]
+        print(len(nltk.word_tokenize(input_vector)))
+        while len(nltk.word_tokenize(input_vector)) <= 15:
+            encoded = tokenizer.texts_to_sequences([input_vector])[0]
+            encoded = pad_sequences([encoded], maxlen=max_length, dtype='int32', padding='pre')
+            predicted_words = model.predict_classes(encoded)
+            # reverse_word_map = dict(map(reversed, tokenizer.word_index.items()))
+            out_word = ''
+            for word, index in tokenizer.word_index.items():
+                if index == predicted_words[0][-1]:
+                    out_word = word
+                    break
+            input_vector = " ".join((input_vector, out_word))
+        outputs.append([input_vector])
+    return outputs
 
 
-# evaluate
-# print(generate_seq(model1, tokenizer, 14, 'First Citizen', 5))
-model1 = load_model('my_gru_model.h5')
-print(generate_seq(model1, tokenizer1, 15, 'First', 15))
+n_words = ['love', 'first', 'citizen', 'second', 'talking', 'poor', 'bear', 'We', 'And', 'I']
+model = load_model('my_gru_model.h5')
+generated_words = results(model, tokenizer, 15, 'love', n_words)
+print("The generated word sequences are:", generated_words)
