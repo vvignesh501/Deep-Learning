@@ -15,7 +15,7 @@ batch_size = 128
 # network parameters
 X_dim = 784  # input dimension
 batch_size = 64  # mini-batch size
-epochs = 30
+epochs = 1
 hidden_dim = 256  # hidden layer dimension
 z_dim = 2  # latent dimension
 
